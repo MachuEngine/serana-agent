@@ -1,0 +1,11 @@
+id: l1-list-subdir
+level: 1-2
+min_steps: 1
+description: List a nested folder.
+prompt: What files are inside logs/2024? Give me their names.
+expect:
+  reply_contains:
+  - jan.log
+  - feb.log
+  reply_excludes:
+  - dec.log

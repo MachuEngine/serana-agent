@@ -1,0 +1,11 @@
+id: l2-tasks-to-notes
+level: 3-5
+min_steps: 4
+description: Turn the lines of a file into separate notes.
+prompt: Read tasks/today.md and save each of its three tasks as a separate note.
+expect:
+  notes_contain:
+  - ficus
+  - library card
+  - landlord
+  notes_count: 3

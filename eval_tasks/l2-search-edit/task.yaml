@@ -1,0 +1,9 @@
+id: l2-search-edit
+level: 3-5
+min_steps: 2
+description: Find the file with a setting and change it.
+prompt: Find the file that mentions 'port 8080' and change it to 'port 9090'.
+expect:
+  files: expected/
+  implied:
+  - deploy/server.conf

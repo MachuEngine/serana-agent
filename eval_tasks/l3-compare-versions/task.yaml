@@ -1,0 +1,10 @@
+id: l3-compare-versions
+level: 10+
+min_steps: 10
+description: Compare two folders file by file and write a change list.
+prompt: Compare each file in v2/ with the file of the same name in v1/. Create CHANGES.md with one line
+  '- <filename>' for every file whose content differs, in alphabetical order.
+expect:
+  files: expected/
+  implied:
+  - CHANGES.md

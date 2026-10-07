@@ -1,0 +1,180 @@
+[
+ {
+  "name": "list_dir",
+  "description": "List files and folders in a directory (folders end with '/').",
+  "input_schema": {
+   "properties": {
+    "path": {
+     "default": ".",
+     "title": "Path",
+     "type": "string"
+    }
+   },
+   "type": "object",
+   "title": "list_dirArguments"
+  }
+ },
+ {
+  "name": "read_file",
+  "description": "Read a text file. Returns at most `limit` characters starting at character `offset`;\n        if the file is longer, the output says the total size and the next offset to use.",
+  "input_schema": {
+   "properties": {
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "offset": {
+     "default": 0,
+     "title": "Offset",
+     "type": "integer"
+    },
+    "limit": {
+     "default": 4000,
+     "title": "Limit",
+     "type": "integer"
+    }
+   },
+   "required": [
+    "path"
+   ],
+   "type": "object",
+   "title": "read_fileArguments"
+  }
+ },
+ {
+  "name": "search_files",
+  "description": "Search file names and file contents (case-insensitive) for a text query.\n        `glob` is relative to the root (no absolute paths or '..').",
+  "input_schema": {
+   "properties": {
+    "query": {
+     "title": "Query",
+     "type": "string"
+    },
+    "glob": {
+     "default": "**/*",
+     "title": "Glob",
+     "type": "string"
+    }
+   },
+   "required": [
+    "query"
+   ],
+   "type": "object",
+   "title": "search_filesArguments"
+  }
+ },
+ {
+  "name": "write_file",
+  "description": "Create a file, or overwrite it if it exists (overwriting needs user confirmation).",
+  "input_schema": {
+   "properties": {
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "content": {
+     "title": "Content",
+     "type": "string"
+    }
+   },
+   "required": [
+    "path",
+    "content"
+   ],
+   "type": "object",
+   "title": "write_fileArguments"
+  }
+ },
+ {
+  "name": "edit_file",
+  "description": "Replace `old` with `new` in a file. `old` must appear exactly once.",
+  "input_schema": {
+   "properties": {
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "old": {
+     "title": "Old",
+     "type": "string"
+    },
+    "new": {
+     "title": "New",
+     "type": "string"
+    }
+   },
+   "required": [
+    "path",
+    "old",
+    "new"
+   ],
+   "type": "object",
+   "title": "edit_fileArguments"
+  }
+ },
+ {
+  "name": "move_file",
+  "description": "Move or rename a file or folder. If `dst` ends with '/' or is an existing folder, the\n        item is moved into it. Replacing an existing file needs confirmation.",
+  "input_schema": {
+   "properties": {
+    "src": {
+     "title": "Src",
+     "type": "string"
+    },
+    "dst": {
+     "title": "Dst",
+     "type": "string"
+    }
+   },
+   "required": [
+    "src",
+    "dst"
+   ],
+   "type": "object",
+   "title": "move_fileArguments"
+  }
+ },
+ {
+  "name": "delete_file",
+  "description": "Delete a file by moving it to .trash/ (always needs user confirmation).",
+  "input_schema": {
+   "properties": {
+    "path": {
+     "title": "Path",
+     "type": "string"
+    }
+   },
+   "required": [
+    "path"
+   ],
+   "type": "object",
+   "title": "delete_fileArguments"
+  }
+ },
+ {
+  "name": "add_note",
+  "description": "Save a short note.",
+  "input_schema": {
+   "properties": {
+    "text": {
+     "title": "Text",
+     "type": "string"
+    }
+   },
+   "required": [
+    "text"
+   ],
+   "type": "object",
+   "title": "add_noteArguments"
+  }
+ },
+ {
+  "name": "list_notes",
+  "description": "List saved notes.",
+  "input_schema": {
+   "properties": {},
+   "type": "object",
+   "title": "list_notesArguments"
+  }
+ }
+]

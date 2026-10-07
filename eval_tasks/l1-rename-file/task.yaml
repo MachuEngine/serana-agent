@@ -1,0 +1,7 @@
+id: l1-rename-file
+level: 1-2
+min_steps: 1
+description: Rename one file.
+prompt: Rename draft.txt to final.txt.
+expect:
+  files: expected/

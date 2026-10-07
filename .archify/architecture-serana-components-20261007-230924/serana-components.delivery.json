@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "5b8eed00-4db3-49e4-a49c-c05319f20b51",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/jongmin/Project/serana-agent/.archify/architecture-serana-components-20261007-230924/candidate.json",
+  "output": "/Users/jongmin/Project/serana-agent/.archify/architecture-serana-components-20261007-230924/serana-components.html",
+  "specification": {
+    "sha256": "aa95facf8d022cfdd871abe720c40f467d63d04e52867a23afcf141066dd4f21",
+    "bytes": 3841
+  },
+  "artifact": {
+    "sha256": "3c2def5198d22a033295366470f17b939cc4a84227480f7bcccf71a339484c6f",
+    "bytes": 766091
+  }
+}

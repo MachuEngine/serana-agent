@@ -1,0 +1,2 @@
+- faq.md
+- setup.md

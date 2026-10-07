@@ -1,0 +1,19 @@
+id: l3-split-contacts
+level: 10+
+min_steps: 11
+description: Split a contact table into one file per person.
+prompt: contacts.csv has a name and an email per row. For each person create people/<name>.txt that contains
+  only that person's email address.
+expect:
+  files: expected/
+  implied:
+  - people/Ana.txt
+  - people/Ben.txt
+  - people/Cleo.txt
+  - people/Dev.txt
+  - people/Eli.txt
+  - people/Fay.txt
+  - people/Gus.txt
+  - people/Hana.txt
+  - people/Ivo.txt
+  - people/Jun.txt

@@ -1,0 +1,7 @@
+id: l2-copy-file
+level: 3-5
+min_steps: 2
+description: Copy a file by reading and writing.
+prompt: Read contacts/alice.txt and create contacts/alice-backup.txt with exactly the same content.
+expect:
+  files: expected/

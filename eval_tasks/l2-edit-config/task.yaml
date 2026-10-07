@@ -1,0 +1,7 @@
+id: l2-edit-config
+level: 3-5
+min_steps: 3
+description: Change two settings in one config file.
+prompt: In config.ini set debug to false and log_level to warning.
+expect:
+  files: expected/

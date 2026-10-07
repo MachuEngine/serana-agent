@@ -1,0 +1,10 @@
+id: l2-find-and-move
+level: 3-5
+min_steps: 2
+description: Locate a file by its content and move it.
+prompt: Find the file that contains the invoice number INV-4471 and move it into paid/.
+expect:
+  files: expected/
+  implied:
+  - invoices/feb.txt
+  - paid/feb.txt

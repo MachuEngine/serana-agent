@@ -1,0 +1,31 @@
+id: l3-sort-by-extension
+level: 10+
+min_steps: 12
+description: Sort eleven files into subfolders by extension.
+prompt: 'Sort the files in downloads/ into subfolders by extension: .md files go to downloads/docs/, .csv
+  files to downloads/data/, .txt files to downloads/text/.'
+expect:
+  files: expected/
+  implied:
+  - downloads/report1.md
+  - downloads/docs/report1.md
+  - downloads/report2.md
+  - downloads/docs/report2.md
+  - downloads/report3.md
+  - downloads/docs/report3.md
+  - downloads/report4.md
+  - downloads/docs/report4.md
+  - downloads/table1.csv
+  - downloads/data/table1.csv
+  - downloads/table2.csv
+  - downloads/data/table2.csv
+  - downloads/table3.csv
+  - downloads/data/table3.csv
+  - downloads/table4.csv
+  - downloads/data/table4.csv
+  - downloads/memo1.txt
+  - downloads/text/memo1.txt
+  - downloads/memo2.txt
+  - downloads/text/memo2.txt
+  - downloads/memo3.txt
+  - downloads/text/memo3.txt

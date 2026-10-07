@@ -1,0 +1,7 @@
+id: l1-create-file
+level: 1-2
+min_steps: 1
+description: Create a new file with given text.
+prompt: 'Create a file named hello.txt containing exactly this one line: Hello, Serana.'
+expect:
+  files: expected/

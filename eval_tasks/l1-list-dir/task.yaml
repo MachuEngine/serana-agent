@@ -1,0 +1,10 @@
+id: l1-list-dir
+level: 1-2
+min_steps: 1
+description: List a folder and report the names.
+prompt: List what is inside the projects folder and tell me the names.
+expect:
+  reply_contains:
+  - alpha.md
+  - beta.md
+  - archive

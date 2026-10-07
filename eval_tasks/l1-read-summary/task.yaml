@@ -1,0 +1,8 @@
+id: l1-read-summary
+level: 1-2
+min_steps: 1
+description: Read one file and summarize it.
+prompt: Read notes/meeting.md and summarize it in one or two sentences.
+expect:
+  reply_contains:
+  - Friday

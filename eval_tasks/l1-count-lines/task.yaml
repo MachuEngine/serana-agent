@@ -1,0 +1,8 @@
+id: l1-count-lines
+level: 1-2
+min_steps: 1
+description: Read a file and count its lines.
+prompt: How many lines are in data/shopping.txt? Answer with the number.
+expect:
+  reply_contains:
+  - '5'

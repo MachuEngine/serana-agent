@@ -1,0 +1,31 @@
+# Copy to serana.toml. API keys are read from environment variables only.
+models_dir = "models"   # relative to this file
+
+[models.serana]          # default: local planner + Serana persona
+provider = "local"
+base = "qwen3-8b-4bit"          # shared by planner and persona
+adapter = "serana-adapter-mlx"  # on only for persona replies
+
+[models.sonnet]
+provider = "anthropic"
+model = "claude-sonnet-5-5"
+api_key_env = "ANTHROPIC_API_KEY"
+
+# [models.gpt]
+# provider = "openai"
+# model = "<model name>"
+# api_key_env = "OPENAI_API_KEY"
+
+[agent]
+step_limit = 20
+memory_k = 5
+skill_k = 3
+planner_think = true
+planner_max_tokens = 2048
+
+[sandbox]
+# root = "~/serana-workspace"   # default: $SERANA_HOME/workspace (~/.serana/workspace)
+mode = "docker"                 # "host" for development without Docker
+
+[tracing]
+project = "serana-agent"        # needs LANGSMITH_API_KEY; eval traces by default, chat/run ask first

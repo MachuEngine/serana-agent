@@ -1,0 +1,20 @@
+{"id": "tc01", "prompt": "docs 폴더에 뭐가 있는지 보여줘", "expected_tool": "list_dir", "expected_args": {"path": "docs"}}
+{"id": "tc02", "prompt": "루트 디렉터리 목록 좀 알려줘", "expected_tool": "list_dir", "expected_args": {"path": "."}}
+{"id": "tc03", "prompt": "src/main.py 파일 내용을 읽어줘", "expected_tool": "read_file", "expected_args": {"path": "src/main.py"}}
+{"id": "tc04", "prompt": "README.md에 뭐라고 적혀 있는지 확인해줘", "expected_tool": "read_file", "expected_args": {"path": "README.md"}}
+{"id": "tc05", "prompt": "notes/todo.txt 열어서 보여줘", "expected_tool": "read_file", "expected_args": {"path": "notes/todo.txt"}}
+{"id": "tc06", "prompt": "'invoice'라는 단어가 들어간 파일을 찾아줘", "expected_tool": "search_files", "expected_args": {"query": "invoice"}}
+{"id": "tc07", "prompt": "파일 중에 TODO가 적힌 곳을 검색해줘", "expected_tool": "search_files", "expected_args": {"query": "TODO"}}
+{"id": "tc08", "prompt": "report 라는 이름이 들어간 파일이 있어?", "expected_tool": "search_files", "expected_args": {"query": "report"}}
+{"id": "tc09", "prompt": "hello.txt 파일을 만들고 'hello world'라고 써줘", "expected_tool": "write_file", "expected_args": {"path": "hello.txt", "content": "hello world"}}
+{"id": "tc10", "prompt": "memo/ideas.md 파일을 새로 만들어서 '아이디어 정리'라고 적어줘", "expected_tool": "write_file", "expected_args": {"path": "memo/ideas.md", "content": "아이디어 정리"}}
+{"id": "tc11", "prompt": "config.ini에서 debug=false를 debug=true로 바꿔줘", "expected_tool": "edit_file", "expected_args": {"path": "config.ini", "old": "debug=false", "new": "debug=true"}}
+{"id": "tc12", "prompt": "main.py의 'v1.0' 문자열을 'v2.0'으로 고쳐줘", "expected_tool": "edit_file", "expected_args": {"path": "main.py", "old": "v1.0", "new": "v2.0"}}
+{"id": "tc13", "prompt": "draft.txt를 final.txt로 이름 바꿔줘", "expected_tool": "move_file", "expected_args": {"src": "draft.txt", "dst": "final.txt"}}
+{"id": "tc14", "prompt": "a.csv 파일을 archive 폴더로 옮겨줘", "expected_tool": "move_file", "expected_args": {"src": "a.csv", "dst": "archive/a.csv"}}
+{"id": "tc15", "prompt": "old/report.md 파일을 지워줘", "expected_tool": "delete_file", "expected_args": {"path": "old/report.md"}}
+{"id": "tc16", "prompt": "tmp.log 삭제해줘", "expected_tool": "delete_file", "expected_args": {"path": "tmp.log"}}
+{"id": "tc17", "prompt": "'금요일까지 보고서 제출'이라고 메모해둬", "expected_tool": "add_note", "expected_args": {"text": "금요일까지 보고서 제출"}}
+{"id": "tc18", "prompt": "메모 하나 남겨줘: 우유 사기", "expected_tool": "add_note", "expected_args": {"text": "우유 사기"}}
+{"id": "tc19", "prompt": "내가 저장해둔 메모 목록 보여줘", "expected_tool": "list_notes", "expected_args": {}}
+{"id": "tc20", "prompt": "지금까지 적어둔 노트 전부 보여줘", "expected_tool": "list_notes", "expected_args": {}}

@@ -1,0 +1,14 @@
+id: l2-move-into-folder
+level: 3-5
+min_steps: 4
+description: Move all .txt files of a folder into a subfolder.
+prompt: Move all the .txt files in inbox/ into inbox/read/. Leave the other files where they are.
+expect:
+  files: expected/
+  implied:
+  - inbox/a.txt
+  - inbox/b.txt
+  - inbox/c.txt
+  - inbox/read/a.txt
+  - inbox/read/b.txt
+  - inbox/read/c.txt

@@ -1,0 +1,8 @@
+id: l1-find-file
+level: 1-2
+min_steps: 1
+description: Search for the file mentioning a word.
+prompt: Which file mentions the word 'espresso'? Tell me its path.
+expect:
+  reply_contains:
+  - recipes/coffee.txt

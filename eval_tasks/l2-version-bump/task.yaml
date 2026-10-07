@@ -1,0 +1,7 @@
+id: l2-version-bump
+level: 3-5
+min_steps: 2
+description: Update a version string in two files.
+prompt: Change the version number from 1.2.0 to 1.3.0 in both VERSION and docs/about.md.
+expect:
+  files: expected/

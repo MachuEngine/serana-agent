@@ -1,0 +1,7 @@
+id: l2-rename-batch
+level: 3-5
+min_steps: 3
+description: Rename three files in a folder.
+prompt: In photos/, rename img1.txt, img2.txt and img3.txt to photo-1.txt, photo-2.txt and photo-3.txt.
+expect:
+  files: expected/

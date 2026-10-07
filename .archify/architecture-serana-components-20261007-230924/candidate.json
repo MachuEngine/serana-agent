@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Serana Agent Components",
+    "locale": "en",
+    "output": ".archify/architecture-serana-components-20261007-230924/serana-components.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "user", "type": "external", "label": "User", "sublabel": "terminal", "pos": [40, 300], "size": [120, 64] },
+    { "id": "cli", "type": "frontend", "label": "serana CLI", "sublabel": "Typer · prompt_toolkit · rich", "pos": [240, 300], "size": [170, 64] },
+    { "id": "orchestrator", "type": "backend", "label": "Orchestrator", "sublabel": "agent loop · step limit", "pos": [480, 296], "size": [200, 72] },
+    { "id": "gate", "type": "security", "label": "Confirm gate", "sublabel": "[y/N] for destructive", "pos": [780, 300], "size": [170, 64] },
+    { "id": "mcp", "type": "backend", "label": "MCP tool server", "sublabel": "Python MCP SDK · stdio", "pos": [1050, 300], "size": [180, 64], "tag": "path checks" },
+    { "id": "sandbox", "type": "database", "label": "Sandbox folder", "sublabel": "only mounted volume", "pos": [1330, 300], "size": [160, 64] },
+    { "id": "persona", "type": "backend", "label": "Persona", "sublabel": "+ Serana LoRA · NoThink", "pos": [225, 110], "size": [200, 68] },
+    { "id": "planner", "type": "backend", "label": "Planner", "sublabel": "adapter off · Think", "pos": [700, 110], "size": [200, 68] },
+    { "id": "memory", "type": "database", "label": "Long-term memory", "sublabel": "ChromaDB · top-k", "pos": [300, 490], "size": [200, 64] },
+    { "id": "skills", "type": "database", "label": "Skill store", "sublabel": "saved on user approval", "pos": [690, 490], "size": [200, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Shared base: Qwen3-8B · MLX 4bit", "wraps": ["persona", "planner"] },
+    { "kind": "security-group", "label": "Docker container · --network none", "wraps": ["mcp", "sandbox"] }
+  ],
+  "connections": [
+    { "id": "user-request", "from": "user", "to": "cli", "label": "request", "variant": "emphasis" },
+    { "id": "cli-task", "from": "cli", "to": "orchestrator", "label": "task", "variant": "emphasis" },
+    { "id": "plan-step", "from": "orchestrator", "to": "planner", "label": "plan next step", "fromSide": "top", "toSide": "left" },
+    { "id": "tool-call", "from": "orchestrator", "to": "gate", "label": "tool call", "variant": "emphasis" },
+    { "id": "approved-call", "from": "gate", "to": "mcp", "label": "approved", "variant": "security" },
+    { "id": "file-ops", "from": "mcp", "to": "sandbox", "label": "file ops" },
+    { "id": "write-reply", "from": "orchestrator", "to": "persona", "label": "write reply", "fromSide": "top", "toSide": "right" },
+    { "id": "reply", "from": "persona", "to": "cli", "label": "in-character reply", "fromSide": "bottom", "toSide": "top" },
+    { "id": "recall", "from": "orchestrator", "to": "memory", "label": "recall", "fromSide": "bottom", "toSide": "right", "variant": "dashed" },
+    { "id": "reuse-skill", "from": "orchestrator", "to": "skills", "label": "reuse skill", "fromSide": "bottom", "toSide": "left", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "violet", "title": "Model roles", "items": ["Planner and persona share one MLX 4bit base", "Serana adapter is off for planning, on for the final reply", "Fallback: load base and merged models separately (~11GB)"] },
+    { "dot": "rose", "title": "Safety", "items": ["Destructive tool calls stop at the confirm gate", "Path checks in server code, plus container isolation", "Every tool call and approval goes to the audit log"] },
+    { "dot": "cyan", "title": "Tracing and routing", "items": ["LangSmith tracing on for serana eval, off by default otherwise", "/model can swap the planner to an API model; Serana still replies"] }
+  ]
+}

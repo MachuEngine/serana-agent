@@ -1,0 +1,7 @@
+id: l2-mark-done
+level: 3-5
+min_steps: 2
+description: Tick a checkbox on one line of a todo list.
+prompt: In todo.md mark the item 'pay rent' as done by changing '[ ]' to '[x]' on that line only.
+expect:
+  files: expected/

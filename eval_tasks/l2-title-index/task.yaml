@@ -1,0 +1,10 @@
+id: l2-title-index
+level: 3-5
+min_steps: 5
+description: Collect first lines of files into an index file.
+prompt: Create summary.md that lists the title (first line) of every file in articles/, one per line,
+  prefixed with '- ', in alphabetical order of the file names.
+expect:
+  files: expected/
+  implied:
+  - summary.md

@@ -1,0 +1,3 @@
+- [ ] buy stamps
+- [x] pay rent
+- [ ] call mom

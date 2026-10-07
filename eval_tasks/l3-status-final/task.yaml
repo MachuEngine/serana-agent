@@ -1,0 +1,19 @@
+id: l3-status-final
+level: 10+
+min_steps: 11
+description: Edit the same line in ten files.
+prompt: 'Every file under docs/ has the line ''Status: draft''. Change it to ''Status: final'' in all
+  of them.'
+expect:
+  files: expected/
+  implied:
+  - docs/page1.md
+  - docs/page2.md
+  - docs/page3.md
+  - docs/page4.md
+  - docs/page5.md
+  - docs/page6.md
+  - docs/page7.md
+  - docs/page8.md
+  - docs/page9.md
+  - docs/page10.md

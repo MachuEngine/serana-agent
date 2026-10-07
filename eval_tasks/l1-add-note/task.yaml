@@ -1,0 +1,8 @@
+id: l1-add-note
+level: 1-2
+min_steps: 1
+description: Save a note.
+prompt: 'Save a note that says: buy oat milk.'
+expect:
+  notes_contain:
+  - oat milk

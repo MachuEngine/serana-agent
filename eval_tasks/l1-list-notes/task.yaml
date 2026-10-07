@@ -1,0 +1,8 @@
+id: l1-list-notes
+level: 1-2
+min_steps: 1
+description: Show existing notes.
+prompt: Show me my saved notes.
+expect:
+  reply_contains:
+  - dentist

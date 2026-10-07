@@ -1,0 +1,7 @@
+id: l1-edit-typo
+level: 1-2
+min_steps: 1
+description: Fix a typo with edit_file.
+prompt: In README.md replace the word 'recieve' with 'receive'.
+expect:
+  files: expected/

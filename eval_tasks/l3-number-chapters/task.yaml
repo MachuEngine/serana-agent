@@ -1,0 +1,26 @@
+id: l3-number-chapters
+level: 10+
+min_steps: 10
+description: Rename eight chapters with a number prefix and write an index.
+prompt: Rename every chapter file in chapters/ from chapterN.md to 0N-chapterN.md (for example chapter3.md
+  becomes 03-chapter3.md). Then create chapters/INDEX.md listing the new file names in order, one per
+  line, each prefixed with '- '.
+expect:
+  files: expected/
+  implied:
+  - chapters/chapter1.md
+  - chapters/01-chapter1.md
+  - chapters/chapter2.md
+  - chapters/02-chapter2.md
+  - chapters/chapter3.md
+  - chapters/03-chapter3.md
+  - chapters/chapter4.md
+  - chapters/04-chapter4.md
+  - chapters/chapter5.md
+  - chapters/05-chapter5.md
+  - chapters/chapter6.md
+  - chapters/06-chapter6.md
+  - chapters/chapter7.md
+  - chapters/07-chapter7.md
+  - chapters/chapter8.md
+  - chapters/08-chapter8.md
