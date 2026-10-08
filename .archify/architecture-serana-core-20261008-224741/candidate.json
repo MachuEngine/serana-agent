@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Serana Agent Core Architecture",
+    "locale": "en",
+    "output": ".archify/architecture-serana-core-20261008-224741/serana-core.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/MachuEngine/serana-agent.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "14fc4840198074a248c6aaa667854d2b75011f18"
+    }
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "User",
+      "sublabel": "terminal",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        120,
+        64
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "frontend",
+      "label": "serana CLI",
+      "sublabel": "REPL · run · eval",
+      "pos": [
+        240,
+        300
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/serana_agent/cli/app.py",
+          "line": 211,
+          "end_line": 240,
+          "label": "run command"
+        }
+      ]
+    },
+    {
+      "id": "loop",
+      "type": "backend",
+      "label": "Agent loop",
+      "sublabel": "one tool call per step · ≤20",
+      "pos": [
+        480,
+        296
+      ],
+      "size": [
+        200,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/serana_agent/agent/loop.py",
+          "line": 207,
+          "end_line": 231,
+          "label": "Agent.run"
+        },
+        {
+          "path": "src/serana_agent/agent/loop.py",
+          "line": 232,
+          "end_line": 318,
+          "label": "plan/act loop"
+        }
+      ]
+    },
+    {
+      "id": "planner",
+      "type": "backend",
+      "label": "Planner",
+      "sublabel": "adapter off · Think",
+      "pos": [
+        700,
+        110
+      ],
+      "size": [
+        200,
+        68
+      ],
+      "sources": [
+        {
+          "path": "src/serana_agent/llm/mlx_local.py",
+          "line": 186,
+          "end_line": 188,
+          "label": "planner()"
+        },
+        {
+          "path": "src/serana_agent/agent/loop.py",
+          "line": 23,
+          "end_line": 39,
+          "label": "PLANNER_PROMPT"
+        }
+      ]
+    },
+    {
+      "id": "persona",
+      "type": "backend",
+      "label": "Persona",
+      "sublabel": "Serana LoRA on · NoThink",
+      "pos": [
+        225,
+        110
+      ],
+      "size": [
+        200,
+        68
+      ],
+      "sources": [
+        {
+          "path": "src/serana_agent/llm/mlx_local.py",
+          "line": 189,
+          "end_line": 191,
+          "label": "persona()"
+        },
+        {
+          "path": "src/serana_agent/agent/persona.py",
+          "line": 46,
+          "end_line": 59,
+          "label": "SFT system prompt"
+        },
+        {
+          "path": "src/serana_agent/agent/loop.py",
+          "line": 351,
+          "end_line": 365,
+          "label": "_persona_reply"
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "type": "backend",
+      "label": "MCP tool server",
+      "sublabel": "9 tools · stdio",
+      "pos": [
+        1000,
+        300
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "tag": "path checks",
+      "sources": [
+        {
+          "path": "src/serana_agent/tools/server.py",
+          "line": 45,
+          "end_line": 66,
+          "label": "confirm + guard"
+        },
+        {
+          "path": "src/serana_agent/tools/server.py",
+          "line": 208,
+          "end_line": 237,
+          "label": "move_file gate"
+        },
+        {
+          "path": "src/serana_agent/tools/sandbox.py",
+          "line": 10,
+          "end_line": 36,
+          "label": "path checks"
+        }
+      ]
+    },
+    {
+      "id": "sandbox",
+      "type": "database",
+      "label": "Sandbox folder",
+      "sublabel": "only mounted volume",
+      "pos": [
+        1280,
+        300
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/serana_agent/tools/launch.py",
+          "line": 13,
+          "end_line": 30,
+          "label": "docker run flags"
+        }
+      ]
+    },
+    {
+      "id": "approval",
+      "type": "security",
+      "label": "Approval gate",
+      "sublabel": "[y/N] in terminal",
+      "pos": [
+        760,
+        470
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/serana_agent/agent/loop.py",
+          "line": 182,
+          "end_line": 198,
+          "label": "ask, then re-call"
+        },
+        {
+          "path": "src/serana_agent/agent/gate.py",
+          "line": 55,
+          "end_line": 66,
+          "label": "TerminalApprover"
+        },
+        {
+          "path": "src/serana_agent/tools/client.py",
+          "line": 50,
+          "end_line": 58,
+          "label": "strip confirmed"
+        }
+      ]
+    },
+    {
+      "id": "memory",
+      "type": "database",
+      "label": "Long-term memory",
+      "sublabel": "ChromaDB · top-k",
+      "pos": [
+        240,
+        490
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/serana_agent/memory/chroma_store.py",
+          "line": 26,
+          "end_line": 50,
+          "label": "ChromaMemoryStore"
+        }
+      ]
+    },
+    {
+      "id": "skills",
+      "type": "database",
+      "label": "Skill store",
+      "sublabel": "approved trajectories",
+      "pos": [
+        480,
+        490
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/serana_agent/skills/store.py",
+          "line": 34,
+          "end_line": 90,
+          "label": "JsonSkillStore"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Shared base: Qwen3-8B · MLX 4bit",
+      "wraps": [
+        "persona",
+        "planner"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Docker container · --network none",
+      "wraps": [
+        "mcp",
+        "sandbox"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "user-request",
+      "from": "user",
+      "to": "cli",
+      "label": "request",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cli-task",
+      "from": "cli",
+      "to": "loop",
+      "label": "task",
+      "variant": "emphasis"
+    },
+    {
+      "id": "plan-step",
+      "from": "loop",
+      "to": "planner",
+      "label": "next tool call",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "tool-call",
+      "from": "loop",
+      "to": "mcp",
+      "label": "tool call",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "ask-user",
+      "from": "loop",
+      "to": "approval",
+      "label": "confirmation_required",
+      "fromSide": "right",
+      "toSide": "top",
+      "variant": "security"
+    },
+    {
+      "id": "re-call",
+      "from": "approval",
+      "to": "mcp",
+      "label": "confirmed=true",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "variant": "security"
+    },
+    {
+      "id": "file-ops",
+      "from": "mcp",
+      "to": "sandbox",
+      "label": "file ops"
+    },
+    {
+      "id": "write-reply",
+      "from": "loop",
+      "to": "persona",
+      "label": "summary",
+      "fromSide": "top",
+      "toSide": "right"
+    },
+    {
+      "id": "reply",
+      "from": "persona",
+      "to": "cli",
+      "label": "Serana reply",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "recall",
+      "from": "loop",
+      "to": "memory",
+      "label": "recall",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "variant": "dashed"
+    },
+    {
+      "id": "reuse-skill",
+      "from": "loop",
+      "to": "skills",
+      "label": "reuse skill",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "Model roles",
+      "items": [
+        "Planner and persona share one MLX 4bit base",
+        "Adapter scale 0 for planning, 2.0 for the reply",
+        "All MLX work runs on one worker thread"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Persona voice",
+      "items": [
+        "Persona uses the exact SFT training system prompt",
+        "Planner hands over terse English notes, not user-facing text"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Safety",
+      "items": [
+        "Server refuses destructive calls without confirmed=true",
+        "Path checks in server code plus Docker isolation",
+        "Every tool call and approval is audit-logged"
+      ]
+    }
+  ]
+}
