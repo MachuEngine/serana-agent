@@ -12,17 +12,20 @@ previous scale is restored afterwards. Planner and persona calls must not run co
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from langsmith import traceable
 
 from serana_agent.llm.api import to_openai_tools
 from serana_agent.llm.base import ChatResult, Message, ToolSpec
 from serana_agent.llm.toolcall import parse_output
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -55,21 +58,36 @@ class LocalModel:
         merged_persona_path: str | None = None,
         temperature: float = 0.0,
     ):
-        from mlx_lm import load
-        from mlx_lm.tuner.lora import LoRALinear
-
         self.temperature = temperature
-        self.model, self.tokenizer = load(base_path, adapter_path=adapter_path)
-        self._lora = [m for _, m in self.model.named_modules() if isinstance(m, LoRALinear)]
+        # MLX streams are per thread: a model loaded on one thread cannot be evaluated on
+        # another ("There is no Stream(cpu, 0) in current thread"). Load and generate on one
+        # dedicated worker so callers may use any thread (the agent loop uses to_thread).
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx")
+        self._worker_id = self._executor.submit(threading.get_ident).result()
+        self._lock = threading.Lock()
+        self.model, self.tokenizer, self._lora, self.merged = self._on_worker(
+            self._load, base_path, adapter_path, merged_persona_path
+        )
         self.adapter_scale = self._lora[0].scale if self._lora else 0.0
         # Template shipped with the adapter; None means "use the tokenizer's own (Qwen3)".
         self.persona_template: str | None = None
         if adapter_path and (Path(adapter_path) / "chat_template.jinja").exists():
             self.persona_template = (Path(adapter_path) / "chat_template.jinja").read_text()
-        self._lock = threading.Lock()
-        self.merged = None
-        if merged_persona_path:
-            self.merged = load(merged_persona_path)
+
+    def _on_worker(self, fn: Callable[..., T], *args: Any) -> T:
+        if threading.get_ident() == self._worker_id:
+            return fn(*args)
+        return self._executor.submit(fn, *args).result()
+
+    @staticmethod
+    def _load(base_path: str, adapter_path: str | None, merged_persona_path: str | None):
+        from mlx_lm import load
+        from mlx_lm.tuner.lora import LoRALinear
+
+        model, tokenizer = load(base_path, adapter_path=adapter_path)
+        lora = [m for _, m in model.named_modules() if isinstance(m, LoRALinear)]
+        merged = load(merged_persona_path) if merged_persona_path else None
+        return model, tokenizer, lora, merged
 
     @contextmanager
     def _adapter(self, on: bool) -> Iterator[None]:
@@ -116,14 +134,21 @@ class LocalModel:
         if self.temperature > 0:
             kwargs["sampler"] = make_sampler(temp=self.temperature)
         with self._lock:
-            if use_merged and self.merged:
-                model, tokenizer = self.merged
-                scope = nullcontext()
-            else:
-                model, tokenizer = self.model, self.tokenizer
-                scope = self._adapter(adapter)
-            with scope:
-                return self._run(model, tokenizer, prompt, max_tokens, kwargs)
+            return self._on_worker(
+                self._generate_locked, prompt, max_tokens, adapter, use_merged, kwargs
+            )
+
+    def _generate_locked(
+        self, prompt: str, max_tokens: int, adapter: bool, use_merged: bool, kwargs: dict[str, Any]
+    ) -> Generation:
+        if use_merged and self.merged:
+            model, tokenizer = self.merged
+            scope = nullcontext()
+        else:
+            model, tokenizer = self.model, self.tokenizer
+            scope = self._adapter(adapter)
+        with scope:
+            return self._run(model, tokenizer, prompt, max_tokens, kwargs)
 
     @staticmethod
     def _run(model, tokenizer, prompt: str, max_tokens: int, kwargs: dict[str, Any]) -> Generation:

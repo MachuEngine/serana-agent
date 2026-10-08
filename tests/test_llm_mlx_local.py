@@ -137,3 +137,17 @@ def test_persona_template_renders_like_qwen3_template(local_model):
     """The adapter ships a chat template; it should match the base template."""
     with_adapter_template = local_model.render(PERSONA_MESSAGES, persona=True)
     assert with_adapter_template == local_model.render(PERSONA_MESSAGES, persona=False)
+
+
+@pytest.mark.model
+@needs_models
+def test_chat_works_from_a_different_thread_than_load():
+    """The agent loop calls chat() via asyncio.to_thread; MLX streams are per thread."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    lm = LocalModel(str(BASE), str(ADAPTER))
+    messages = [{"role": "user", "content": "안녕"}]
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        for role in (lm.planner(), lm.persona()):
+            result = pool.submit(role.chat, messages, max_tokens=16).result()
+            assert result.content

@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 import pytest
@@ -9,6 +10,8 @@ from serana_agent.agent.loop import Agent
 from serana_agent.llm.base import ChatResult, ToolCall
 from serana_agent.memory.types import MemoryItem, Skill, SkillStep
 from serana_agent.tools.client import ToolClient
+
+TRAINING_PROMPT_SHA256 = "931f0dc825feb8be651b6256b76c4c22759197497536050b14a1511e89fd4276"
 
 
 @pytest.fixture
@@ -379,3 +382,44 @@ async def test_persona_context_drops_tool_record_lines(root):
         await agent.run("x", history)
     assert [m["content"] for m in persona.calls[0]["messages"][1:-1]] == ["hi", "hey", "again"]
     assert "[tools run this turn]" in planner.calls[0]["messages"][2]["content"]
+
+
+def test_training_system_prompt_matches_sft_prompt():
+    from serana_agent.agent.persona import PERSONA_PROFILE, TRAINING_SYSTEM_PROMPT
+
+    assert TRAINING_SYSTEM_PROMPT.startswith(
+        "You are Serana, a character from The Elder Scrolls V: Skyrim -- Dawnguard."
+    )
+    assert PERSONA_PROFILE.strip() in TRAINING_SYSTEM_PROMPT
+    assert PERSONA_PROFILE.strip().startswith("나는 세라나.")
+    # This prompt must stay byte-identical to the SFT training prompt in serana-post-training
+    # (src/finetune/train.py). Update the hash only if training changes.
+    assert hashlib.sha256(TRAINING_SYSTEM_PROMPT.encode()).hexdigest() == TRAINING_PROMPT_SHA256
+
+
+def test_persona_prompt_has_faithfulness_rules():
+    from serana_agent.agent.loop import PERSONA_PROMPT
+
+    assert "Base the reply only on the execution summary" in PERSONA_PROMPT
+    assert "do not claim anything that is not in it" in PERSONA_PROMPT
+    assert "failed, was denied, or the task stopped early" in PERSONA_PROMPT
+
+
+def test_planner_prompt_requires_english_exact_report():
+    from serana_agent.agent.loop import PLANNER_PROMPT
+
+    assert "in English" in PLANNER_PROMPT
+    assert "No greeting" in PLANNER_PROMPT
+    assert "not addressed to the user" in PLANNER_PROMPT
+    assert "Copy names, numbers, file paths and quoted file text exactly" in PLANNER_PROMPT
+
+
+async def test_persona_call_uses_persona_prompt(root):
+    from serana_agent.agent.loop import PERSONA_PROMPT
+    from serana_agent.agent.persona import TRAINING_SYSTEM_PROMPT
+
+    assert PERSONA_PROMPT.startswith(TRAINING_SYSTEM_PROMPT)
+    async with ToolClient(root, "host") as tools:
+        agent, _, persona = make_agent(tools, [final()])
+        await agent.run("hi")
+    assert persona.calls[0]["messages"][0] == {"role": "system", "content": PERSONA_PROMPT}
