@@ -48,3 +48,6 @@ class RunResult:
     latency_s: float = 0.0
     usage: dict[str, int] = field(default_factory=dict)
     used_skill_ids: list[str] = field(default_factory=list)
+    # Reporter notes built from the executed tool log (empty when no tool ran). The persona
+    # and eval use this instead of the planner's own final text, which can claim undone work.
+    report: str = ""

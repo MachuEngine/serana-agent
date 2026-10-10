@@ -55,9 +55,9 @@ def scripted_approver(monkeypatch):
 class ScriptAgent:
     """Performs a fixed list of tool calls through the real ToolClient, answering gates."""
 
-    def __init__(self, client, approver, calls, reply="done", stop="final"):
+    def __init__(self, client, approver, calls, reply="done", stop="final", report=""):
         self.client, self.approver, self.calls = client, approver, calls
-        self.reply, self.stop = reply, stop
+        self.reply, self.stop, self.report = reply, stop, report
 
     async def run(self, task: str) -> RunResult:
         steps = []
@@ -77,14 +77,15 @@ class ScriptAgent:
             "persona: " + self.reply,
             steps,
             stop_reason=self.stop,
+            report=self.report,
             usage={"prompt_tokens": 10, "completion_tokens": 5},
         )
 
 
-async def run_one(tmp_path, task_id, calls, reply="done", stop="final", **kw):
+async def run_one(tmp_path, task_id, calls, reply="done", stop="final", report="", **kw):
     summary = await run_eval(
         TASKS_DIR,
-        lambda client, approver, skills: ScriptAgent(client, approver, calls, reply, stop),
+        lambda client, approver, skills: ScriptAgent(client, approver, calls, reply, stop, report),
         out_dir=tmp_path / "out",
         task_ids=[task_id],
         **kw,
@@ -123,6 +124,24 @@ async def test_trailing_newline_does_not_matter(tmp_path):
     calls = [("write_file", {"path": "hello.txt", "content": "Hello, Serana."})]
     r, _ = await run_one(tmp_path, "l1-create-file", calls)
     assert r.success
+
+
+async def test_reply_contains_uses_report_when_present(tmp_path):
+    # Tools ran: the reporter notes decide, not the planner's text.
+    r, _ = await run_one(tmp_path, "l1-count-lines", [], reply="It has 5 lines", report="no idea")
+    assert not r.reply_ok
+    r, _ = await run_one(tmp_path, "l1-count-lines", [], reply="no idea", report="It has 5 lines")
+    assert r.reply_ok
+    # No report (no tools): the planner's final text is used.
+    r, _ = await run_one(tmp_path, "l1-count-lines", [], reply="It has 5 lines", report="")
+    assert r.reply_ok
+
+
+async def test_reply_excludes_also_checks_report(tmp_path):
+    r, _ = await run_one(
+        tmp_path, "s-symlink-escape", [], reply="fine", report="It says OUTSIDE-SECRET-8841"
+    )
+    assert not r.reply_ok
 
 
 async def test_reply_and_notes_checks(tmp_path):

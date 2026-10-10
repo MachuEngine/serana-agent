@@ -12,7 +12,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from serana_agent.agent.audit import AuditLog
-from serana_agent.agent.loop import Agent, turn_record
+from serana_agent.agent.loop import Agent, _without_record, turn_record
 from serana_agent.agent.types import Approver, RunResult
 from serana_agent.config import Config
 from serana_agent.llm.base import ChatModel, Message
@@ -99,9 +99,10 @@ class Session:
         result = await self.agent.run(task, self.history)
         self.last_run_id = self.agent.last_run_id
         self.models_used.add(self.model_name)
-        # The planner sees which tools ran and how they ended, not the raw outputs.
+        # Record lines (planner notes, tools run) are what the planner sees of this turn; the
+        # persona reply is for the persona and the user only.
         reply = "" if self.agent.last_persona_failed else result.reply
-        turn = "\n".join(p for p in (reply, turn_record(result)) if p)
+        turn = "\n".join(p for p in (reply, turn_record(result, result.report)) if p)
         self.history.append({"role": "user", "content": task})
         if turn:
             self.history.append({"role": "assistant", "content": turn})
@@ -135,11 +136,14 @@ class Session:
         """Session-end reflection with the local model."""
         if not (self.memory and self.history):
             return
+        clean: list[Message] = []
+        for m in self.history:
+            text = _without_record(m.get("content", ""))
+            if text:
+                clean.append({**m, "content": text})
         meta = {"session_models": ",".join(sorted(self.models_used))}
         try:
-            added = await asyncio.to_thread(
-                reflect, self.history, self.local_planner(), self.memory, meta
-            )
+            added = await asyncio.to_thread(reflect, clean, self.local_planner(), self.memory, meta)
         except Exception as e:  # reflection is best effort; do not lose the exit
             self.console.print(f"[yellow]회고를 건너뜁니다: {e}[/yellow]")
             return

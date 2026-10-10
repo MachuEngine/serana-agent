@@ -237,10 +237,14 @@ def score_run(
     )
     reply = result.reply if result else ""
     final = _planner_final(result)
-    # Required text comes from the planner (the persona's style must not decide success);
+    # Required text comes from the reporter notes when tools ran, else the planner's final text
+    # (the persona's style must not decide success);
     # forbidden text is checked in both because a leak in either reaches the user.
-    reply_ok = all(_has_word(final, s) for s in task.reply_contains) and not any(
-        _has_word(final, s) or _has_word(reply, s) for s in task.reply_excludes
+    report = result.report if result else ""
+    required = report or final
+    reply_ok = all(_has_word(required, s) for s in task.reply_contains) and not any(
+        _has_word(final, s) or _has_word(reply, s) or _has_word(report, s)
+        for s in task.reply_excludes
     )
 
     met = sum(

@@ -128,6 +128,7 @@ def test_run_offers_skill_after_two_tool_calls(env):
         call("list_dir", path="."),
         call("read_file", path="a.txt"),
         final(),
+        ChatResult("Listed and read."),  # reporter
         ChatResult('{"name": "peek", "description": "look around", "placeholders": {}}'),
     ]
     result = runner.invoke(app_mod.app, ["run", "look", *base_args(env)], input="y\n")
@@ -325,11 +326,12 @@ def test_env_langsmith_tracing_cannot_turn_tracing_on_outside_agent_run(env, mon
         call("list_dir", path="."),
         call("read_file", path="a.txt"),
         final(),
+        ChatResult("Listed and read."),  # reporter
         ChatResult('{"name": "peek", "description": "look", "placeholders": {}}'),  # skill summary
     ]
     result = runner.invoke(app_mod.app, ["run", "look", *base_args(env)], input="y\n")
     assert result.exit_code == 0, result.output
-    assert len(states) == 5 and not any(states)  # planner x3, persona, skill extraction
+    assert len(states) == 6 and not any(states)  # planner x3, reporter, persona, skill extraction
     assert not tracing.tracing_enabled()
 
 
@@ -423,7 +425,17 @@ async def test_trace_command_shows_last_run(env):
 
 
 async def test_history_keeps_tool_record_and_skips_failure_placeholder(env):
-    env.registry.planner.script = [call("read_file", path="a.txt"), final(), final()]
+    env.registry.planner.script = [
+        call("read_file", path="a.txt"),
+        final(),
+        ChatResult("Read a.txt: one short line."),  # reporter
+        call("read_file", path="a.txt"),
+        final(),
+        ChatResult("Read a.txt again."),  # reporter
+        call("read_file", path="a.txt"),
+        final(),
+        ChatResult("Read a.txt a third time."),  # reporter
+    ]
     out = io.StringIO()
     async with ToolClient(env.root, "host") as tools:
         session = Session(
@@ -433,6 +445,7 @@ async def test_history_keeps_tool_record_and_skips_failure_placeholder(env):
         await session.handle("read a.txt")
         assert session.history[1]["content"].endswith("[tools run this turn] read_file(a.txt) ok")
         assert "hello" not in session.history[1]["content"]
+        assert "[planner notes] Read a.txt: one short line." in session.history[1]["content"]
 
         class Boom(FakeModel):
             def chat(self, *a, **k):
@@ -443,7 +456,42 @@ async def test_history_keeps_tool_record_and_skips_failure_placeholder(env):
         await session.handle("again")
     contents = [m["content"] for m in session.history]
     assert not any("응답을 만들지 못했습니다" in c for c in contents)
-    # turn 2 ran no tools and has no reply, so it left only the user message
-    assert [m["role"] for m in session.history] == ["user", "assistant", "user", "user"]
-    planner_msgs = env.registry.planner.calls[2]["messages"]
+    # failed persona turns store no reply, only the record lines
+    assert [m["role"] for m in session.history] == ["user", "assistant"] * 3
+    assert session.history[3]["content"].startswith("[planner notes]")
+    planner_msgs = env.registry.planner.calls[3]["messages"]
     assert "[tools run this turn] read_file(a.txt) ok" in str(planner_msgs)
+
+
+async def test_end_reflects_on_history_without_record_lines(env, monkeypatch):
+    env.registry.planner.script = [
+        call("read_file", path="a.txt"),
+        final("planner claim"),
+        ChatResult("Read a.txt: one short line."),  # reporter
+    ]
+    seen = []
+
+    def fake_reflect(history, model, memory, meta=None):
+        seen.append(history)
+        return []
+
+    from serana_agent.cli import session as session_mod
+
+    monkeypatch.setattr(session_mod, "reflect", fake_reflect)
+    async with ToolClient(env.root, "host") as tools:
+        session = Session(
+            Config(home=Path("/nonexistent")), env.registry, tools, ScriptedApprover([]),
+            lambda p: False, Console(file=io.StringIO(), width=200), memory=env.memory,
+        )  # fmt: skip
+        await session.handle("read a.txt")
+        stored = session.history[1]["content"]
+        assert "[planner notes] Read a.txt: one short line." in stored
+        assert "planner claim" not in stored
+        session.history.append({"role": "user", "content": "x"})
+        session.history.append({"role": "assistant", "content": "[tools run this turn] a(b) ok"})
+        await session.end()
+    assert [(m["role"], m["content"]) for m in seen[0]] == [
+        ("user", "read a.txt"),
+        ("assistant", "Serana says hi"),
+        ("user", "x"),
+    ]
