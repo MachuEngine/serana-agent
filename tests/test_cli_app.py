@@ -168,7 +168,11 @@ def test_repl_slash_commands_via_cli(env):
 
 
 def test_repl_reflects_on_exit(env):
-    env.registry.planner.script = [final("ok"), ChatResult('["Prefers short answers"]')]
+    env.registry.planner.script = [
+        final("ok"),
+        ChatResult("no"),  # action check
+        ChatResult('["Prefers short answers"]'),
+    ]
     result = runner.invoke(app_mod.app, base_args(env), input="hello\n/exit\n")
     assert result.exit_code == 0, result.output
     assert [m.text for m in env.memory.items] == ["Prefers short answers"]
@@ -460,7 +464,8 @@ async def test_history_keeps_tool_record_and_skips_failure_placeholder(env):
     assert [m["role"] for m in session.history] == ["user", "assistant"] * 3
     assert session.history[3]["content"].startswith("[planner notes]")
     planner_msgs = env.registry.planner.calls[3]["messages"]
-    assert "[tools run this turn] read_file(a.txt) ok" in str(planner_msgs)
+    assert [m["role"] for m in planner_msgs] == ["system", "user"]
+    assert "Done: read_file(a.txt) ok" in planner_msgs[0]["content"]
 
 
 async def test_end_reflects_on_history_without_record_lines(env, monkeypatch):

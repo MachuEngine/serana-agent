@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import itertools
 import json
 import os
@@ -25,6 +26,8 @@ HIDDEN = {".trash", ".notes"}
 MAX_SEARCH_RESULTS = 50
 MAX_GLOB_VISITS = 10_000
 MAX_SEARCH_FILE_BYTES = 1_000_000
+MAX_SIMILAR = 3
+DEFAULT_GLOB = "**/*"
 
 
 def _truncate(text: str) -> str:
@@ -95,6 +98,60 @@ def build_server(root: Path) -> MCPServer:
     def exists(p: Path) -> bool:
         return p.exists() or p.is_symlink()
 
+    def similar_hint(path: str) -> str:
+        """' Similar paths: a, b, c' for a missing path, or '' if nothing is close.
+        Only visible entries inside the root are considered; the walk is bounded."""
+        wanted = path.strip().replace("\\", "/").lstrip("/")
+        while wanted.startswith("./"):
+            wanted = wanted[2:]
+        wanted = wanted.rstrip("/")
+        if not wanted:
+            return ""
+
+        def inside(p: Path) -> bool:
+            try:
+                return visible(p) and p.resolve().is_relative_to(root)
+            except (RuntimeError, OSError):  # symlink loop, unreadable entry: skip it
+                return False
+
+        rels: list[str] = []
+        visits = 0
+        try:
+            for dirpath, dirnames, filenames in os.walk(root):
+                base = Path(dirpath)
+                dirnames[:] = sorted(d for d in dirnames if inside(base / d))
+                for name in [*dirnames, *sorted(filenames)]:
+                    visits += 1
+                    if visits > MAX_GLOB_VISITS:
+                        break
+                    child = base / name
+                    if name in dirnames or inside(child):
+                        rels.append(rel(child))
+                if visits > MAX_GLOB_VISITS:
+                    break
+        except (RuntimeError, OSError):
+            return ""
+        found: list[str] = []
+
+        def add(matches: list[str]) -> None:
+            for m in matches:
+                if m not in found and len(found) < MAX_SIMILAR:
+                    found.append(m)
+
+        add(difflib.get_close_matches(wanted, rels, n=MAX_SIMILAR))
+        by_name: dict[str, list[str]] = {}
+        by_stem: dict[str, list[str]] = {}
+        for r in rels:
+            leaf = r.rsplit("/", 1)[-1]
+            by_name.setdefault(leaf, []).append(r)
+            by_stem.setdefault(leaf.rsplit(".", 1)[0] if "." in leaf else leaf, []).append(r)
+        leaf = wanted.rsplit("/", 1)[-1]
+        stem = leaf.rsplit(".", 1)[0] if "." in leaf else leaf
+        for table, key in ((by_name, leaf), (by_stem, stem)):
+            for m in difflib.get_close_matches(key, list(table), n=MAX_SIMILAR):
+                add(table[m])
+        return f" Similar paths: {', '.join(found)}" if found else ""
+
     @server.tool()
     def list_dir(path: str = ".") -> str:
         """List files and folders in a directory (folders end with '/')."""
@@ -102,7 +159,7 @@ def build_server(root: Path) -> MCPServer:
         def run() -> str:
             d = resolve_visible(path)
             if not d.is_dir():
-                return _error("list_dir", f"not a directory: {path}")
+                return _error("list_dir", f"not a directory: {path}" + similar_hint(path))
             names = sorted(c.name + ("/" if c.is_dir() else "") for c in d.iterdir() if visible(c))
             return _ok("list_dir", "\n".join(names) or "(empty)")
 
@@ -116,7 +173,7 @@ def build_server(root: Path) -> MCPServer:
         def run() -> str:
             f = resolve_visible(path)
             if not f.is_file():
-                return _error("read_file", f"file not found: {path}")
+                return _error("read_file", f"file not found: {path}" + similar_hint(path))
             if offset < 0 or limit < 1:
                 return _error("read_file", "offset must be >= 0 and limit >= 1")
             with f.open(encoding="utf-8", errors="replace", newline="") as fh:
@@ -132,32 +189,41 @@ def build_server(root: Path) -> MCPServer:
 
         return guarded("read_file", run)
 
+    def find(pattern: str, query: str) -> list[str]:
+        q = query.lower()
+        hits: list[str] = []
+        for f in sorted(itertools.islice(root.glob(pattern), MAX_GLOB_VISITS)):
+            if len(hits) >= MAX_SEARCH_RESULTS:
+                break
+            if not f.is_file() or not f.resolve().is_relative_to(root) or not visible(f):
+                continue
+            name = rel(f)
+            if q in name.lower():
+                hits.append(name)
+                continue
+            if f.stat().st_size > MAX_SEARCH_FILE_BYTES:
+                continue
+            text = f.read_text(encoding="utf-8", errors="replace")
+            for n, line in enumerate(text.splitlines(), 1):
+                if q in line.lower():
+                    hits.append(f"{name}:{n}: {line.strip()[:200]}")
+                    break
+        return hits
+
     @server.tool()
-    def search_files(query: str, glob: str = "**/*") -> str:
+    def search_files(query: str, glob: str = DEFAULT_GLOB) -> str:
         """Search file names and file contents (case-insensitive) for a text query.
         `glob` is relative to the root (no absolute paths or '..')."""
 
         def run() -> str:
             if not glob or Path(glob).is_absolute() or ".." in Path(glob).parts:
                 return _error("search_files", f"invalid glob {glob!r}: use a relative pattern")
-            q = query.lower()
-            hits: list[str] = []
-            for f in sorted(itertools.islice(root.glob(glob), MAX_GLOB_VISITS)):
-                if len(hits) >= MAX_SEARCH_RESULTS:
-                    break
-                if not f.is_file() or not f.resolve().is_relative_to(root) or not visible(f):
-                    continue
-                name = rel(f)
-                if q in name.lower():
-                    hits.append(name)
-                    continue
-                if f.stat().st_size > MAX_SEARCH_FILE_BYTES:
-                    continue
-                text = f.read_text(encoding="utf-8", errors="replace")
-                for n, line in enumerate(text.splitlines(), 1):
-                    if q in line.lower():
-                        hits.append(f"{name}:{n}: {line.strip()[:200]}")
-                        break
+            hits = find(glob, query)
+            if not hits and glob != DEFAULT_GLOB:
+                elsewhere = find(DEFAULT_GLOB, query)
+                if elsewhere:
+                    head = f'no matches in "{glob}"; matches elsewhere in the folder:'
+                    return _ok("search_files", "\n".join([head, *elsewhere]), count=len(elsewhere))
             return _ok("search_files", "\n".join(hits) or "no matches", count=len(hits))
 
         return guarded("search_files", run)
@@ -185,7 +251,7 @@ def build_server(root: Path) -> MCPServer:
         def run() -> str:
             f = resolve_visible(path)
             if not f.is_file():
-                return _error("edit_file", f"file not found: {path}")
+                return _error("edit_file", f"file not found: {path}" + similar_hint(path))
             if not old:
                 return _error("edit_file", "`old` must not be empty")
             # newline="" keeps CRLF as-is so `old` can match and untouched lines stay unchanged.
@@ -214,7 +280,7 @@ def build_server(root: Path) -> MCPServer:
             s = link_visible(src)
             d = link_visible(dst)
             if not exists(s):
-                return _error("move_file", f"source not found: {src}")
+                return _error("move_file", f"source not found: {src}" + similar_hint(src))
             shown = dst
             if dst.endswith("/") or d.is_dir():
                 # "into folder" semantics; overwrite checks below use the final target
@@ -243,7 +309,7 @@ def build_server(root: Path) -> MCPServer:
         def run() -> str:
             f = link_visible(path)
             if not f.is_symlink() and not f.is_file():
-                return _error("delete_file", f"file not found: {path}")
+                return _error("delete_file", f"file not found: {path}" + similar_hint(path))
             if not confirmed:
                 return _confirm("delete_file", f"Move {path} to .trash/")
             trash = root / ".trash"

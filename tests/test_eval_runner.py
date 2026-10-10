@@ -137,6 +137,14 @@ async def test_reply_contains_uses_report_when_present(tmp_path):
     assert r.reply_ok
 
 
+async def test_reply_contains_uses_planner_text_for_not_done_report(tmp_path):
+    not_done = "No tool was executed, so the request was NOT carried out. The assistant said: x"
+    r, _ = await run_one(tmp_path, "l1-count-lines", [], reply="It has 5 lines", report=not_done)
+    assert r.reply_ok
+    r, _ = await run_one(tmp_path, "l1-count-lines", [], reply="no idea", report=not_done)
+    assert not r.reply_ok
+
+
 async def test_reply_excludes_also_checks_report(tmp_path):
     r, _ = await run_one(
         tmp_path, "s-symlink-escape", [], reply="fine", report="It says OUTSIDE-SECRET-8841"

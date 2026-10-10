@@ -308,3 +308,134 @@ async def test_docker_mode_roundtrip(root):
     async with ToolClient(root, "docker") as c:
         assert (await c.call("write_file", {"path": "d.txt", "content": "hi"})).status == "ok"
     assert (root / "d.txt").read_text() == "hi"
+
+
+# -- hints for the planner: search fallback and similar paths --
+
+
+def _outcome(raw):
+    return ToolOutcome.from_json(raw if isinstance(raw, str) else raw.content[0].text)
+
+
+@with_client
+async def test_search_falls_back_to_whole_root(client, root, tmp_path):
+    (root / "notes").mkdir()
+    (root / "notes" / "todo.md").write_text("buy milk")
+    (root / "meeting.md").write_text("# 회의록\nfoo")
+    out = await client.call("search_files", {"query": "회의록", "glob": "notes/**/*"})
+    assert out.status == "ok" and out.details["count"] == 1
+    lines = out.output.split("\n")
+    assert lines[0] == 'no matches in "notes/**/*"; matches elsewhere in the folder:'
+    assert lines[1:] == ["meeting.md:1: # 회의록"]
+    print(out.output)
+
+
+@with_client
+async def test_search_no_fallback_cases(client, root, tmp_path):
+    (root / "a.txt").write_text("alpha")
+    # default glob and nothing found: plain message
+    out = await client.call("search_files", {"query": "zzz"})
+    assert out.output == "no matches" and out.details["count"] == 0
+    # custom glob, nothing anywhere
+    out = await client.call("search_files", {"query": "zzz", "glob": "sub/*"})
+    assert out.output == "no matches" and out.details["count"] == 0
+    # custom glob with hits: no header
+    out = await client.call("search_files", {"query": "alpha", "glob": "*.txt"})
+    assert out.output == "a.txt:1: alpha"
+
+
+@with_client
+async def test_search_fallback_respects_hidden_and_sandbox(client, root, tmp_path):
+    (root / ".trash").mkdir()
+    (root / ".trash" / "old.md").write_text("secretword")
+    (root / ".notes").mkdir()
+    (root / ".notes" / "n.md").write_text("secretword")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secretword")
+    (root / "leak.txt").symlink_to(outside)
+    (root / "sub").mkdir()
+    out = await client.call("search_files", {"query": "secretword", "glob": "sub/*"})
+    assert out.output == "no matches"
+
+
+@with_client
+async def test_search_fallback_limits(client, root, tmp_path):
+    from serana_agent.tools.server import MAX_SEARCH_RESULTS
+
+    for i in range(MAX_SEARCH_RESULTS + 5):
+        (root / f"f{i:03}.txt").write_text("needle")
+    out = await client.call("search_files", {"query": "needle", "glob": "sub/*"})
+    assert out.details["count"] == MAX_SEARCH_RESULTS
+    assert len(out.output.split("\n")) == MAX_SEARCH_RESULTS + 1
+
+
+@with_client
+async def test_missing_file_errors_suggest_similar_paths(client, root, tmp_path):
+    (root / "notes").mkdir()
+    (root / "notes" / "회의록.md").write_text("x")
+    (root / "notes" / "todo.md").write_text("x")
+    cases = [
+        ("read_file", {"path": "notes/회의록.txt"}),
+        ("edit_file", {"path": "notes/회의록.txt", "old": "a", "new": "b"}),
+        ("delete_file", {"path": "notes/회의록.txt"}),
+        ("move_file", {"src": "notes/회의록.txt", "dst": "x.txt"}),
+        ("list_dir", {"path": "note"}),
+    ]
+    for tool, args in cases:
+        out = await client.call(tool, args)
+        assert out.status == "error", tool
+        assert "Similar paths:" in out.error, (tool, out.error)
+    out = await client.call("read_file", {"path": "notes/회의록.txt"})
+    assert out.error == "file not found: notes/회의록.txt Similar paths: notes/회의록.md"
+    print(out.error)
+    out = await client.call("list_dir", {"path": "note"})
+    assert out.error.endswith("Similar paths: notes")
+    print(out.error)
+    out = await client.call("read_file", {"path": "todo.md"})  # matches by basename
+    assert out.error.endswith("Similar paths: notes/todo.md")
+
+
+@with_client
+async def test_similar_paths_omitted_and_capped(client, root, tmp_path):
+    out = await client.call("read_file", {"path": "nothing.txt"})
+    assert out.error == "file not found: nothing.txt"
+    for n in "abcde":
+        (root / f"report-{n}.txt").write_text("x")
+    out = await client.call("read_file", {"path": "report-z.txt"})
+    suffix = out.error.split("Similar paths: ")[1]
+    assert 1 <= len(suffix.split(", ")) <= 3
+
+
+@with_client
+async def test_similar_paths_exclude_hidden_and_outside(client, root, tmp_path):
+    (root / ".trash").mkdir()
+    (root / ".trash" / "report.md").write_text("x")
+    (root / ".notes").mkdir()
+    (root / ".notes" / "report.md").write_text("x")
+    (tmp_path / "report.txt").write_text("x")  # outside the root
+    (root / "link.txt").symlink_to(tmp_path / "report.txt")
+    (root / "linkdir").symlink_to(tmp_path, target_is_directory=True)
+    out = await client.call("read_file", {"path": "report.mdx"})
+    assert out.error == "file not found: report.mdx"
+    out = await client.call("read_file", {"path": "../report.txt"})
+    assert out.details.get("sandbox_violation") and "Similar" not in out.error
+
+
+@with_client
+async def test_missing_file_with_symlink_loop_still_reports_not_found(client, root, tmp_path):
+    (root / "loop").symlink_to("loop")  # self-referential
+    (root / "notes.md").write_text("x")
+    out = await client.call("read_file", {"path": "missing.md"})
+    assert out.status == "error"
+    assert "file not found: missing.md" in out.error
+
+
+@with_client
+async def test_symlink_loop_not_in_similar_paths(client, root, tmp_path):
+    (root / "loop").symlink_to("loop")
+    (root / "loops.md").write_text("x")
+    out = await client.call("read_file", {"path": "loop.md"})
+    assert out.status == "error"
+    assert "file not found: loop.md" in out.error
+    assert "Similar paths: loops.md" in out.error
+    assert "loop," not in out.error and not out.error.endswith("loop")
