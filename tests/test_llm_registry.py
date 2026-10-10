@@ -21,7 +21,8 @@ class FakeLocal:
         self.args = (base, adapter, merged_persona_path)
         FakeLocal.created.append(self)
 
-    def planner(self):
+    def planner(self, **kwargs):
+        self.planner_kwargs = kwargs
         return ("planner", self)
 
     def persona(self):
@@ -61,3 +62,14 @@ def test_full_rejects_local_and_unknown_provider():
         reg.pair("serana", full=True)
     with pytest.raises(ValueError, match="unknown provider"):
         reg.pair("x")
+
+
+def test_planner_think_sampling_passed_to_local_planner():
+    reg = registry.ModelRegistry(MODELS, planner_think_sampling=True, planner_think_seed=5)
+    (_, lm), _ = reg.pair("serana")
+    assert lm.planner_kwargs == {"think_sampling": True, "think_seed": 5}
+
+
+def test_planner_think_sampling_off_by_default():
+    (_, lm), _ = registry.ModelRegistry(MODELS).pair("serana")
+    assert lm.planner_kwargs == {}

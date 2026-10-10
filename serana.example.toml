@@ -22,6 +22,8 @@ memory_k = 5
 skill_k = 3
 planner_think = true
 planner_max_tokens = 2048
+planner_think_sampling = false  # true: local planner think calls sample (T 0.6, top_p 0.95, top_k 20) instead of greedy
+planner_think_seed = 0          # MLX RNG seed set before each sampled think call (reproducible runs)
 
 [sandbox]
 # root = "~/serana-workspace"   # default: $SERANA_HOME/workspace (~/.serana/workspace)

@@ -25,6 +25,8 @@ class Config:
     skill_k: int = 3
     planner_think: bool = True
     planner_max_tokens: int = 2048
+    planner_think_sampling: bool = False
+    planner_think_seed: int = 0
     langsmith_project: str = "serana-agent"
 
     @property
@@ -77,6 +79,10 @@ def load_config(path: Path | None = None) -> Config:
     cfg.skill_k = int(agent.get("skill_k", cfg.skill_k))
     cfg.planner_think = bool(agent.get("planner_think", cfg.planner_think))
     cfg.planner_max_tokens = int(agent.get("planner_max_tokens", cfg.planner_max_tokens))
+    cfg.planner_think_sampling = bool(
+        agent.get("planner_think_sampling", cfg.planner_think_sampling)
+    )
+    cfg.planner_think_seed = int(agent.get("planner_think_seed", cfg.planner_think_seed))
     sandbox = data.get("sandbox", {})
     if "root" in sandbox:
         cfg.sandbox_root = _path(sandbox["root"], base)

@@ -67,6 +67,70 @@ def test_merged_model_only_used_when_adapter_requested():
     assert not lm._uses_merged(persona=False, adapter=True)
 
 
+def _sampling_model(monkeypatch, temperature=0.0):
+    """LocalModel whose generation is faked; records samplers and seeds."""
+    pytest.importorskip("mlx_lm")
+    mx = pytest.importorskip("mlx.core")
+    import mlx_lm.sample_utils as su
+
+    from serana_agent.llm.mlx_local import Generation
+
+    rec = {"samplers": [], "seeds": []}
+    monkeypatch.setattr(su, "make_sampler", lambda **kw: rec["samplers"].append(kw) or kw)
+    monkeypatch.setattr(mx.random, "seed", lambda s: rec["seeds"].append(s))
+    lm = _bare_model([])
+    lm.temperature = temperature
+    lm._on_worker = lambda fn, *a: fn(*a)
+    lm.model = lm.tokenizer = None
+    lm.persona_template = None
+    lm.render = lambda *a, **k: "prompt"
+
+    def run(model, tokenizer, prompt, max_tokens, kwargs):
+        rec["samplers"].append(("run", kwargs.get("sampler")))
+        return Generation("hi", [1], 3)
+
+    lm._run = run
+    return lm, rec
+
+
+MSG = [{"role": "user", "content": "x"}]
+
+
+def test_think_sampling_uses_qwen_settings_and_seeds(monkeypatch):
+    lm, rec = _sampling_model(monkeypatch)
+    role = lm.planner(think_sampling=True, think_seed=11)
+    role.chat.__wrapped__(role, MSG, think=True)
+    assert rec["seeds"] == [11]
+    assert rec["samplers"][0] == {"temp": 0.6, "top_p": 0.95, "top_k": 20}
+    assert rec["samplers"][1][1] == rec["samplers"][0]
+
+
+def test_think_sampling_skips_non_think_and_persona(monkeypatch):
+    lm, rec = _sampling_model(monkeypatch)
+    lm._lora = [object()]  # persona adapter requires LoRA layers
+    lm._adapter = lambda on: __import__("contextlib").nullcontext()
+    planner = lm.planner(think_sampling=True, think_seed=11)
+    planner.chat.__wrapped__(planner, MSG, think=False)
+    persona = lm.persona()
+    persona.think_seed = 11  # even if mis-set, persona never thinks
+    persona.chat.__wrapped__(persona, MSG, think=True)
+    assert rec["seeds"] == [] and rec["samplers"] == [("run", None), ("run", None)]
+
+
+def test_think_sampling_off_keeps_greedy(monkeypatch):
+    lm, rec = _sampling_model(monkeypatch)
+    role = lm.planner()
+    role.chat.__wrapped__(role, MSG, think=True)
+    assert rec["seeds"] == [] and rec["samplers"] == [("run", None)]
+
+
+def test_non_think_call_keeps_model_temperature(monkeypatch):
+    lm, rec = _sampling_model(monkeypatch, temperature=0.3)
+    role = lm.planner(think_sampling=True)
+    role.chat.__wrapped__(role, MSG, think=False)
+    assert rec["seeds"] == [] and rec["samplers"][0] == {"temp": 0.3}
+
+
 needs_models = pytest.mark.skipif(
     not (BASE.exists() and ADAPTER.exists()),
     reason="converted models missing: run scripts/convert_base.sh and scripts/convert_adapter.py",

@@ -27,6 +27,9 @@ from serana_agent.llm.toolcall import parse_output
 
 T = TypeVar("T")
 
+# Qwen3 recommended settings for thinking mode (greedy can loop endlessly).
+THINK_TEMPERATURE, THINK_TOP_P, THINK_TOP_K = 0.6, 0.95, 20
+
 
 @dataclass
 class Generation:
@@ -126,21 +129,42 @@ class LocalModel:
         )
 
     def generate(
-        self, prompt: str, max_tokens: int, *, adapter: bool, use_merged: bool = False
+        self,
+        prompt: str,
+        max_tokens: int,
+        *,
+        adapter: bool,
+        use_merged: bool = False,
+        think_seed: int | None = None,
     ) -> Generation:
+        """`think_seed` set: sample with Qwen3's thinking settings, seeding the RNG first."""
         from mlx_lm.sample_utils import make_sampler
 
         kwargs: dict[str, Any] = {}
-        if self.temperature > 0:
+        if think_seed is not None:
+            kwargs["sampler"] = make_sampler(
+                temp=THINK_TEMPERATURE, top_p=THINK_TOP_P, top_k=THINK_TOP_K
+            )
+        elif self.temperature > 0:
             kwargs["sampler"] = make_sampler(temp=self.temperature)
         with self._lock:
             return self._on_worker(
-                self._generate_locked, prompt, max_tokens, adapter, use_merged, kwargs
+                self._generate_locked, prompt, max_tokens, adapter, use_merged, kwargs, think_seed
             )
 
     def _generate_locked(
-        self, prompt: str, max_tokens: int, adapter: bool, use_merged: bool, kwargs: dict[str, Any]
+        self,
+        prompt: str,
+        max_tokens: int,
+        adapter: bool,
+        use_merged: bool,
+        kwargs: dict[str, Any],
+        think_seed: int | None = None,
     ) -> Generation:
+        if think_seed is not None:
+            import mlx.core as mx
+
+            mx.random.seed(think_seed)  # on the worker thread, right before generating
         if use_merged and self.merged:
             model, tokenizer = self.merged
             scope = nullcontext()
@@ -170,10 +194,15 @@ class LocalModel:
         adapter: bool,
         think: bool,
         max_tokens: int,
+        think_seed: int | None = None,
     ) -> ChatResult:
         prompt = self.render(messages, tools, persona=persona, adapter=adapter, think=think)
         gen = self.generate(
-            prompt, max_tokens, adapter=adapter, use_merged=self._uses_merged(persona, adapter)
+            prompt,
+            max_tokens,
+            adapter=adapter,
+            use_merged=self._uses_merged(persona, adapter),
+            think_seed=think_seed if think and not persona else None,
         )
         content, calls, error = parse_output(gen.text)
         return ChatResult(
@@ -183,8 +212,16 @@ class LocalModel:
             usage={"prompt_tokens": gen.prompt_tokens, "completion_tokens": len(gen.token_ids)},
         )
 
-    def planner(self, *, adapter: bool = False) -> LocalRole:
-        return LocalRole(self, "local-planner", persona=False, adapter=adapter)
+    def planner(
+        self, *, adapter: bool = False, think_sampling: bool = False, think_seed: int = 0
+    ) -> LocalRole:
+        return LocalRole(
+            self,
+            "local-planner",
+            persona=False,
+            adapter=adapter,
+            think_seed=think_seed if think_sampling else None,
+        )
 
     def persona(self, *, adapter: bool = True) -> LocalRole:
         return LocalRole(self, "local-persona", persona=True, adapter=adapter)
@@ -193,7 +230,16 @@ class LocalModel:
 class LocalRole:
     """ChatModel view of LocalModel. Persona never thinks and never gets tools."""
 
-    def __init__(self, lm: LocalModel, name: str, *, persona: bool, adapter: bool):
+    def __init__(
+        self,
+        lm: LocalModel,
+        name: str,
+        *,
+        persona: bool,
+        adapter: bool,
+        think_seed: int | None = None,
+    ):
+        self.think_seed = think_seed  # not None: think=True calls sample with this seed
         self.lm = lm
         self.name = name
         self.persona = persona
@@ -215,4 +261,5 @@ class LocalRole:
             adapter=self.adapter,
             think=False if self.persona else think,
             max_tokens=max_tokens,
+            think_seed=self.think_seed,
         )

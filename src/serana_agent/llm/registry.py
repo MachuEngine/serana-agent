@@ -11,9 +11,18 @@ from serana_agent.llm.mlx_local import LocalModel
 
 
 class ModelRegistry:
-    def __init__(self, models: dict[str, dict[str, Any]], models_dir: Path = Path("models")):
+    def __init__(
+        self,
+        models: dict[str, dict[str, Any]],
+        models_dir: Path = Path("models"),
+        *,
+        planner_think_sampling: bool = False,
+        planner_think_seed: int = 0,
+    ):
         self.models = models
         self.models_dir = models_dir
+        self.planner_think_sampling = planner_think_sampling
+        self.planner_think_seed = planner_think_seed
         self._local: dict[str, LocalModel] = {}
 
     def names(self) -> list[str]:
@@ -35,6 +44,11 @@ class ModelRegistry:
                 merged_persona_path=str(self.models_dir / merged) if merged else None,
             )
         return self._local[name]
+
+    def _planner(self, lm: LocalModel) -> ChatModel:
+        if not self.planner_think_sampling:
+            return lm.planner()
+        return lm.planner(think_sampling=True, think_seed=self.planner_think_seed)
 
     def _api(self, name: str) -> ChatModel:
         cfg = self.models[name]
@@ -58,7 +72,7 @@ class ModelRegistry:
             if full:
                 raise ValueError("--full needs an API model, not a local one")
             lm = self._local_model(name)
-            return lm.planner(), lm.persona()
+            return self._planner(lm), lm.persona()
         api = self._api(name)
         if full:
             return api, api

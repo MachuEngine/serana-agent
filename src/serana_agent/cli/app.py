@@ -54,7 +54,12 @@ def _opts(ctx: typer.Context) -> GlobalOpts:
 
 
 def build_registry(cfg: Config) -> ModelRegistry:
-    return ModelRegistry(cfg.models, cfg.models_dir)
+    return ModelRegistry(
+        cfg.models,
+        cfg.models_dir,
+        planner_think_sampling=cfg.planner_think_sampling,
+        planner_think_seed=cfg.planner_think_seed,
+    )
 
 
 def open_memory(cfg: Config) -> MemoryStore:

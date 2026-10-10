@@ -42,6 +42,16 @@ def test_file_overrides_and_relative_paths(tmp_path):
     assert cfg.langsmith_project == "p"
 
 
+def test_planner_think_sampling_options(tmp_path):
+    conf = tmp_path / "serana.toml"
+    conf.write_text("[agent]\nplanner_think_sampling = true\nplanner_think_seed = 7\n")
+    cfg = load_config(conf)
+    assert cfg.planner_think_sampling is True and cfg.planner_think_seed == 7
+    conf.write_text("[agent]\n")
+    cfg = load_config(conf)
+    assert cfg.planner_think_sampling is False and cfg.planner_think_seed == 0
+
+
 def test_local_serana_toml_is_found_and_bad_mode_rejected(tmp_path):
     (tmp_path / "serana.toml").write_text('[sandbox]\nmode = "vm"\n')
     with pytest.raises(ValueError):
