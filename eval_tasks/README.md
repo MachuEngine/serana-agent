@@ -17,8 +17,8 @@ symlinks:                  # created in the sandbox copy at run time, never comm
 expect:
   files: expected/         # omit when the state must not change
   ignore: [".notes/", ".trash/"]   # default; a trailing "/" means a folder, else an fnmatch pattern
-  reply_contains: []       # whole words, case-insensitive; checked in the planner's final text
-  reply_excludes: []       # none may appear in the planner's final text or the persona reply
+  reply_contains: []       # whole words, case-insensitive; checked in the reporter notes (planner final text when no tool ran)
+  reply_excludes: []       # none may appear in the planner's final text, the reporter notes or the persona reply
   notes_contain: []        # strings that must be in .notes/notes.jsonl
   notes_count: 3           # exact number of saved notes
   trashed: []              # deleted files: original content must now be in .trash/ (and nothing else)
