@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from typing import Any
@@ -54,6 +55,12 @@ PERSONA_CHAT_TURNS = 4
 NOT_DONE_TAIL = (
     "Verified by the tool log: NO file was changed in this turn. Do not say you added, changed "
     "or saved anything; say it was not done. Reply to the request above."
+)
+# Korean on purpose: the adapter keeps 반말 far more reliably when the last instruction is Korean
+# and names the endings; an English closing produced 존댓말.
+PERSONA_CLOSING = (
+    "위 실행 요약에 있는 것만 가지고, 세라나 말투로 나한테 결과를 말해줘. "
+    "존댓말 쓰지 말고 반말(~했어, ~야)로."
 )
 SESSION_TURNS = 6
 SESSION_LINE_CHARS = 300
@@ -128,6 +135,20 @@ def _executed(result: RunResult, step: Step) -> bool:
     if step.tool_call is None or step.outcome is None:
         return False
     return not (result.stop_reason == "invalid_tool_call" and step is result.steps[-1])
+
+
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+|(?<=[。！？])\s*")
+
+
+def _not_done_report(planner_text: str) -> str:
+    # Non-questions are dropped: a planner that ran no tool often claims work it did not do,
+    # and the persona repeats the claim. Of a question only the closing sentence is kept,
+    # since a claim before it ("I added X. Anything else?") may be false.
+    said = " ".join(planner_text.split())
+    if said.endswith(("?", "？")):
+        question = [p for p in _SENTENCE_BOUNDARY.split(said) if p][-1]
+        return f"{NOT_DONE_REPORT} The assistant asked: {question[:NOT_DONE_SAID_CHARS]}"
+    return NOT_DONE_REPORT
 
 
 def _add_usage(total: dict[str, int], usage: dict[str, int]) -> None:
@@ -308,8 +329,7 @@ class Agent:
             result.report = await self._report(result)
         if not_done:
             said = next((s.planner_text for s in reversed(result.steps) if s.tool_call is None), "")
-            said = " ".join(said.split())[:NOT_DONE_SAID_CHARS]
-            result.report = NOT_DONE_REPORT + (f" The assistant said: {said}" if said else "")
+            result.report = _not_done_report(said)
         result.reply = await self._persona_reply(result, history or [], not_done)
         self._record_skill_outcomes(result, retrieved)
         result.latency_s = time.perf_counter() - started
@@ -520,7 +540,7 @@ class Agent:
             and result.stop_reason == "final"
             and not any(s.tool_call for s in result.steps)
         )
-        closing = NOT_DONE_TAIL if not_done else "Reply to the request above based on this summary."
+        closing = f"{NOT_DONE_TAIL}\n{PERSONA_CLOSING}" if not_done else PERSONA_CLOSING
         if chat_turn:
             # Plain conversation: use the SFT format so the persona answers directly instead of
             # restating the planner's assistant-style report.

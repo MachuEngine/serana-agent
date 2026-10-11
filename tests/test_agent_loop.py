@@ -6,7 +6,13 @@ from test_agent_fakes import FakeModel, call, final
 
 from serana_agent.agent.audit import AuditLog
 from serana_agent.agent.gate import GateRule, ScriptedApprover
-from serana_agent.agent.loop import ACTION_CHECK_PROMPT, REPORTER_PROMPT, Agent, turn_record
+from serana_agent.agent.loop import (
+    ACTION_CHECK_PROMPT,
+    PERSONA_CLOSING,
+    REPORTER_PROMPT,
+    Agent,
+    turn_record,
+)
 from serana_agent.llm.base import ChatResult, ToolCall
 from serana_agent.memory.types import MemoryItem, Skill, SkillStep
 from serana_agent.tools.client import ToolClient
@@ -369,7 +375,7 @@ async def test_summary_tag_in_tool_output_is_escaped(root):
         await agent.run("read")
     summary = persona.calls[0]["messages"][-1]["content"]
     assert summary.count("</execution_summary>") == 1 and summary.endswith(
-        "Reply to the request above based on this summary."
+        "</execution_summary>\n" + PERSONA_CLOSING
     )
 
 
@@ -583,6 +589,7 @@ async def test_chat_turn_uses_training_format(root):
     assert [m["content"] for m in msgs[1:-1]] == ["hi", "hey"]
     assert "<execution_summary>" not in json.dumps(msgs)
     assert "file assistant" not in json.dumps(msgs)
+    assert PERSONA_CLOSING not in json.dumps(msgs, ensure_ascii=False)
 
 
 async def test_tool_turn_keeps_summary_path(root):
@@ -777,8 +784,18 @@ async def test_guard_retry_executes_tool(root):
     events = [json.loads(ln)["event"] for ln in audit.path.read_text().split("\n") if ln]
     assert "action_retry" in events
     assert persona.calls[0]["messages"][-1]["content"].endswith(
-        "Reply to the request above based on this summary."
+        "</execution_summary>\n" + PERSONA_CLOSING
     )
+
+
+async def test_persona_closing_is_korean_banmal_instruction(root):
+    assert "반말" in PERSONA_CLOSING
+    async with ToolClient(root, "host") as tools:
+        agent, _, persona = make_agent(tools, [call("read_file", path="a.txt"), final()])
+        await agent.run("read")
+    content = persona.calls[0]["messages"][-1]["content"]
+    assert "Reply to the request above based on this summary." not in content
+    assert content.count(PERSONA_CLOSING) == 1
 
 
 async def test_guard_retry_still_no_tool_reports_not_done(root):
@@ -789,22 +806,69 @@ async def test_guard_retry_still_no_tool_reports_not_done(root):
         RETRY_NUDGE,
     )
 
-    script = [final("added"), ChatResult("yes"), final("Which\nfolder?  " + "z" * 400)]
+    script = [final("added"), ChatResult("yes"), final("Which\nfolder?  " + "z" * 400 + " ok?")]
     async with ToolClient(root, "host") as tools:
         agent, planner, persona = make_agent(tools, script)
         result = await agent.run("add a note")
     assert len(planner.calls) == 3  # plan, check, retry; no reporter
     assert NOT_DONE_REPORT == "No tool was executed, so the request was NOT carried out."
-    said = "Which folder? " + "z" * 400
-    assert result.report == f"{NOT_DONE_REPORT} The assistant said: {said[:300]}"
+    said = "z" * 400 + " ok?"  # only the closing question is kept
+    assert len(said) > 300
+    assert result.report == f"{NOT_DONE_REPORT} The assistant asked: {said[:300]}"
     assert RETRY_NUDGE not in planner.calls[0]["messages"][0]["content"]
     assert RETRY_NUDGE in planner.calls[2]["messages"][0]["content"]
     msgs = persona.calls[0]["messages"]
     assert msgs[0]["content"] == PERSONA_PROMPT
     summary = msgs[-1]["content"]
     assert f"Report: {NOT_DONE_REPORT}" in summary
-    assert summary.endswith(f"</execution_summary>\n{NOT_DONE_TAIL}")
+    assert summary.endswith(f"</execution_summary>\n{NOT_DONE_TAIL}\n{PERSONA_CLOSING}")
     assert NOT_DONE_TAIL.startswith("Verified by the tool log: NO file was changed")
+
+
+@pytest.mark.parametrize(
+    ("planner_text", "asked"),
+    [
+        ("I added X to meeting.md. Anything else?", "Anything else?"),
+        ("Which todo item should I check?", "Which todo item should I check?"),
+        ("메모를 추가했어요. 다른 것도 할까요?", "다른 것도 할까요?"),
+        ("메모를 추가했어요。다른 것도 할까요？", "다른 것도 할까요？"),
+        ("Done! Wait... Really?\nWhich file?", "Which file?"),
+        ("q" * 400 + "?", "q" * 300),
+        ("I added the line to meeting.md.", None),
+        ("", None),
+    ],
+)
+def test_not_done_report_keeps_only_closing_question(planner_text, asked):
+    from serana_agent.agent.loop import NOT_DONE_REPORT, _not_done_report
+
+    expected = (
+        NOT_DONE_REPORT if asked is None else f"{NOT_DONE_REPORT} The assistant asked: {asked}"
+    )
+    assert _not_done_report(planner_text) == expected
+
+
+@pytest.mark.parametrize(
+    ("planner_text", "suffix"),
+    [
+        ("I added the line to meeting.md.", ""),
+        (
+            "Which todo item should I check?",
+            " The assistant asked: Which todo item should I check?",
+        ),
+        ("어느 항목을 체크할까요？", " The assistant asked: 어느 항목을 체크할까요？"),
+        ("", ""),
+    ],
+)
+async def test_not_done_report_keeps_only_questions(root, planner_text, suffix):
+    from serana_agent.agent.loop import NOT_DONE_REPORT
+
+    script = [final("added"), ChatResult("yes"), final(planner_text)]
+    async with ToolClient(root, "host") as tools:
+        agent, _, persona = make_agent(tools, script)
+        result = await agent.run("add a note")
+    assert result.report == NOT_DONE_REPORT + suffix
+    if not suffix and planner_text:
+        assert planner_text not in persona.calls[0]["messages"][-1]["content"]
 
 
 async def test_guard_check_exception_is_no(root):
@@ -864,7 +928,7 @@ async def _not_done_run(root, script, **kw):
         agent, planner, persona = make_agent(tools, script, **kw)
         result = await agent.run("add a note")
     summary = persona.calls[0]["messages"][-1]["content"]
-    assert summary.endswith(NOT_DONE_TAIL)
+    assert summary.endswith(f"</execution_summary>\n{NOT_DONE_TAIL}\n{PERSONA_CLOSING}")
     assert "Planner's final report" not in summary
     assert result.report.startswith("No tool was executed")
     return result, planner
@@ -903,7 +967,8 @@ async def test_first_loop_error_gives_not_done(root):
     assert result.report.startswith("No tool was executed")
     assert persona.calls[0]["messages"][-1]["content"].endswith(
         "Verified by the tool log: NO file was changed in this turn. Do not say you added, "
-        "changed or saved anything; say it was not done. Reply to the request above."
+        "changed or saved anything; say it was not done. Reply to the request above.\n"
+        + PERSONA_CLOSING
     )
 
 
